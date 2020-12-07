@@ -34,7 +34,7 @@ from argparse import ArgumentParser
 from overviewer_core import config_parser, logger, nbt, world
 from overviewer_core.files import FileReplacer, get_fs_caps
 
-UUID_LOOKUP_URL = 'https://sessionserver.mojang.com/session/minecraft/profile/'
+UUID_LOOKUP_URL = 'http://tools.glowingmines.eu/convertor/uuid/'
 
 
 DIMENSION_INT_TO_STR = {
@@ -281,18 +281,23 @@ class PlayerDict(dict):
         try:
             profile = PlayerDict.uuid_cache[sname]
             if profile['retrievedAt'] > time.mktime(self['time']):
-                return profile['name']
+                return profile['nick']
         except (KeyError,):
             pass
 
         try:
+            print(UUID_LOOKUP_URL + sname)
             profile = json.loads(
                 urllib.request.urlopen(UUID_LOOKUP_URL + sname).read().decode("utf-8")
             )
-            if 'name' in profile:
+            print(profile)
+            if 'nick' in profile:
                 profile['retrievedAt'] = time.mktime(time.localtime())
                 PlayerDict.uuid_cache[sname] = profile
-                return profile['name']
+                print(profile['nick'])
+                return profile['nick']
+            else:
+                print("no nick found")
         except (ValueError, urllib.error.URLError):
             logging.warning("Unable to get player name for UUID %s.", self._name)
 
@@ -307,7 +312,7 @@ def handlePlayers(worldpath, filters, markers):
     `markers`.
     """
     playerdir = os.path.join(worldpath, "playerdata")
-    useUUIDs = True
+    useUUIDs = False
     if not os.path.isdir(playerdir):
         playerdir = os.path.join(worldpath, "players")
         useUUIDs = False
@@ -322,7 +327,14 @@ def handlePlayers(worldpath, filters, markers):
 
     for playerfile in playerfiles:
         try:
-            data = PlayerDict(nbt.load(os.path.join(playerdir, playerfile))[1])
+            playerfilepath = os.path.join(playerdir, playerfile)
+            mod_timestamp = datetime.datetime.fromtimestamp(os.path.getmtime(playerfilepath))
+            timediff = datetime.datetime.now() - mod_timestamp
+            if str(timediff) > "7 days":
+                print("skipped")
+                continue
+            print(playerfile)
+            data = PlayerDict(nbt.load(playerfilepath)[1])
             data.use_uuid = useUUIDs
             if isSinglePlayer:
                 data = data['Data']['Player']
@@ -333,9 +345,16 @@ def handlePlayers(worldpath, filters, markers):
         playername = playerfile.split(".")[0]
         if isSinglePlayer:
             playername = 'Player'
-        data._name = playername
         if useUUIDs:
+            data._name = playername
             data['uuid'] = playername
+        else:
+            try:
+                data._name = data['bukkit']['lastKnownName']
+                data['uuid'] = data['bukkit']['lastKnownName']
+            except:
+                print("Error occured for " + playername)
+
 
         # Position at last logout
         data['id'] = "Player"
