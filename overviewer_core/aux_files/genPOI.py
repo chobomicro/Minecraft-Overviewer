@@ -338,7 +338,7 @@ def handlePlayers(worldpath, filters, markers):
             data.use_uuid = useUUIDs
             if isSinglePlayer:
                 data = data['Data']['Player']
-        except (IOError, TypeError):
+        except (IOError, TypeError, KeyError):
             logging.warning("Skipping bad player dat file %r.", playerfile)
             continue
 
